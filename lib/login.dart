@@ -1,4 +1,9 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:formvalidateapp/home.dart';
 
 class LoginUser extends StatefulWidget {
   const LoginUser({super.key});
@@ -11,6 +16,121 @@ TextEditingController email = TextEditingController();
 TextEditingController password = TextEditingController();
 
 class _LoginUserState extends State<LoginUser> {
+  bool isLoading = false;
+
+  Future<void> loginUser() async {
+    if (email.text.trim().isEmpty || password.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Please enter email and password',
+            style: TextStyle(color: const Color.fromARGB(255, 146, 220, 213)),
+          ),
+          duration: Duration(seconds: 2),
+          backgroundColor: const Color.fromARGB(255, 1, 82, 74),
+          behavior: SnackBarBehavior.floating,
+          margin: EdgeInsets.all(10),
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      isLoading = true;
+    });
+
+    try {
+      await FirebaseAuth.instance.signInWithEmailAndPassword(
+        email: email.text.trim(),
+        password: password.text,
+      );
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Logged In Successfully!',
+            style: TextStyle(color: const Color.fromARGB(255, 146, 220, 213)),
+          ),
+          duration: Duration(seconds: 2),
+          backgroundColor: const Color.fromARGB(255, 1, 82, 74),
+          behavior: SnackBarBehavior.floating,
+          margin: EdgeInsets.all(10),
+        ),
+      );
+
+      final user = FirebaseAuth.instance.currentUser!;
+
+      final doc = await FirebaseFirestore.instance
+          .collection('Users')
+          .doc(user.uid)
+          .get();
+
+      if (!doc.exists) {
+        throw Exception('User details not found');
+      }
+
+      final data = doc.data()!;
+
+      if (!mounted) return;
+
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (context) => Home(
+            Name: data['name'] ?? '',
+            Email: data['email'] ?? user.email ?? '',
+            ProfileImage: null,
+            Cnic: data['cnic'] ?? '',
+            Phone: data['phone'] ?? '',
+            Age: data['age'] ?? '',
+          ),
+        ),
+      );
+    } on FirebaseAuthException catch (e) {
+      if (!mounted) return;
+
+      String message;
+
+      if (e.code == 'invalid-credential' ||
+          e.code == 'wrong-password' ||
+          e.code == 'user-not-found') {
+        message = 'Invalid email or password!';
+      } else if (e.code == 'invalid-email') {
+        message = 'Please enter a valid email!';
+      } else {
+        message = e.message ?? 'Login failed. Please try again.';
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            message,
+            style: TextStyle(color: const Color.fromARGB(255, 146, 220, 213)),
+          ),
+          duration: Duration(seconds: 2),
+          backgroundColor: const Color.fromARGB(255, 1, 82, 74),
+          behavior: SnackBarBehavior.floating,
+          margin: EdgeInsets.all(10),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          isLoading = false;
+        });
+      }
+    }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    email.clear();
+    password.clear();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -41,7 +161,7 @@ class _LoginUserState extends State<LoginUser> {
                   cursorColor: const Color.fromARGB(255, 1, 82, 74),
                   decoration: InputDecoration(
                     filled: true,
-                    fillColor: const Color.fromARGB(255, 146, 220, 213),
+                    fillColor: const Color.fromARGB(255, 217, 232, 231),
                     hintText: "Enter Email",
                     prefixIcon: Icon(Icons.email),
                     enabledBorder: OutlineInputBorder(
@@ -65,7 +185,7 @@ class _LoginUserState extends State<LoginUser> {
                   cursorColor: const Color.fromARGB(255, 1, 82, 74),
                   decoration: InputDecoration(
                     filled: true,
-                    fillColor: const Color.fromARGB(255, 146, 220, 213),
+                    fillColor: const Color.fromARGB(255, 217, 232, 231),
                     hintText: "Enter Password",
                     prefixIcon: Icon(Icons.password),
                     suffixIcon: Icon(Icons.remove_red_eye),
@@ -88,26 +208,11 @@ class _LoginUserState extends State<LoginUser> {
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color.fromARGB(255, 1, 82, 74),
                   ),
-                  onPressed: () {
-                    email.clear();
-                    password.clear();
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          "Logged In Successfully!",
-                          style: TextStyle(
-                            color: const Color.fromARGB(255, 146, 220, 213),
-                          ),
-                        ),
-                        backgroundColor: const Color.fromARGB(255, 1, 82, 74),
-                        duration: Duration(seconds: 2),
-                      ),
-                    );
-                  },
+                  onPressed: isLoading ? null : loginUser,
                   child: Text(
-                    "Login",
-                    style: TextStyle(
-                      color: const Color.fromARGB(255, 146, 220, 213),
+                    isLoading ? 'Logging In...' : 'Login',
+                    style: const TextStyle(
+                      color: Color.fromARGB(255, 146, 220, 213),
                     ),
                   ),
                 ),
